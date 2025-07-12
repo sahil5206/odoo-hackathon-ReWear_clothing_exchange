@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, ShoppingBag } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import BackButton from '../components/BackButton';
 
 const LoginPage = () => {
   const [formData, setFormData] = useState({
@@ -8,8 +10,12 @@ const LoginPage = () => {
     password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, loginWithGoogle, loading } = useAuth();
+
+  const from = location.state?.from?.pathname || '/dashboard';
 
   const handleChange = (e) => {
     setFormData({
@@ -18,24 +24,48 @@ const LoginPage = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-    
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      navigate('/dashboard');
-    }, 1000);
+  const validateForm = () => {
+    const newErrors = {};
+    if (!formData.email) newErrors.email = 'Email is required';
+    if (!formData.password) newErrors.password = 'Password is required';
+    return newErrors;
   };
 
-  const handleGoogleLogin = () => {
-    // Google OAuth implementation
-    console.log('Google login clicked');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const newErrors = validateForm();
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    setErrors({});
+    const result = await login(formData.email, formData.password);
+    
+    if (result.success) {
+      navigate(from, { replace: true });
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const result = await loginWithGoogle();
+      if (result.success) {
+        navigate(from, { replace: true });
+      }
+    } catch (error) {
+      console.error('Google login error:', error);
+    }
   };
 
   return (
     <div className="min-h-screen gradient-bg flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      {/* Back Button */}
+      <div className="fixed top-4 left-4 z-40">
+        <BackButton variant="outline" text="Back to Home" />
+      </div>
+
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
@@ -64,11 +94,14 @@ const LoginPage = () => {
                   name="email"
                   type="email"
                   required
-                  className="input-field pl-10"
+                  className={`input-field pl-10 ${errors.email ? 'border-red-500 focus:ring-red-500' : ''}`}
                   placeholder="Enter your email"
                   value={formData.email}
                   onChange={handleChange}
                 />
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                )}
               </div>
             </div>
 
@@ -85,11 +118,14 @@ const LoginPage = () => {
                   name="password"
                   type={showPassword ? 'text' : 'password'}
                   required
-                  className="input-field pl-10 pr-10"
+                  className={`input-field pl-10 pr-10 ${errors.password ? 'border-red-500 focus:ring-red-500' : ''}`}
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
                 />
+                {errors.password && (
+                  <p className="mt-1 text-sm text-red-600">{errors.password}</p>
+                )}
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
@@ -126,10 +162,10 @@ const LoginPage = () => {
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={loading}
                 className="btn-primary w-full flex justify-center items-center"
               >
-                {isLoading ? (
+                {loading ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 ) : (
                   'Sign In'

@@ -178,4 +178,50 @@ router.put('/profile', async (req, res) => {
   }
 });
 
+// Firebase Google OAuth sync endpoint
+router.post('/firebase-sync', async (req, res) => {
+  try {
+    const { uid, email, displayName, photoURL } = req.body;
+    if (!uid || !email) {
+      return res.status(400).json({ message: 'Missing Firebase user info' });
+    }
+
+    // Try to find user by email
+    let user = await User.findOne({ email });
+    if (!user) {
+      // Create new user if not found
+      const [firstName, ...rest] = (displayName || '').split(' ');
+      user = new User({
+        firstName: firstName || 'Google',
+        lastName: rest.join(' ') || '',
+        email,
+        avatar: photoURL,
+        provider: 'google',
+        password: uid // Not used, but required by schema
+      });
+      await user.save();
+    }
+
+    // Generate backend JWT
+    const token = generateToken(user._id);
+
+    res.json({
+      message: 'Firebase user synced',
+      token,
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        avatar: user.avatar,
+        points: user.points,
+        isAdmin: user.isAdmin
+      }
+    });
+  } catch (error) {
+    console.error('Firebase sync error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 module.exports = router; 

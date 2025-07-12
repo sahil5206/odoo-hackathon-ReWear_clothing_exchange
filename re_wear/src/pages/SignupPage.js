@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, Mail, Lock, User, ShoppingBag } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import BackButton from '../components/BackButton';
 
 const SignupPage = () => {
   const [formData, setFormData] = useState({
@@ -12,9 +14,9 @@ const SignupPage = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const navigate = useNavigate();
+  const { register, loginWithGoogle, loading } = useAuth();
 
   const handleChange = (e) => {
     setFormData({
@@ -68,22 +70,38 @@ const SignupPage = () => {
       return;
     }
 
-    setIsLoading(true);
+    const userData = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      password: formData.password
+    };
+
+    const result = await register(userData);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
+    if (result.success) {
       navigate('/dashboard');
-    }, 1000);
+    }
   };
 
-  const handleGoogleSignup = () => {
-    // Google OAuth implementation
-    console.log('Google signup clicked');
+  const handleGoogleSignup = async () => {
+    try {
+      const result = await loginWithGoogle();
+      if (result.success) {
+        navigate('/dashboard');
+      }
+    } catch (error) {
+      console.error('Google signup error:', error);
+    }
   };
 
   return (
     <div className="min-h-screen gradient-bg flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      {/* Back Button */}
+      <div className="fixed top-4 left-4 z-40">
+        <BackButton variant="outline" text="Back to Home" />
+      </div>
+
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
@@ -240,13 +258,13 @@ const SignupPage = () => {
 
             <div className="flex items-center">
               <input
-                id="agree-terms"
-                name="agree-terms"
+                id="terms"
+                name="terms"
                 type="checkbox"
                 required
                 className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-earth-300 rounded"
               />
-              <label htmlFor="agree-terms" className="ml-2 block text-sm text-earth-700">
+              <label htmlFor="terms" className="ml-2 block text-sm text-earth-700">
                 I agree to the{' '}
                 <Link to="/terms" className="text-primary-600 hover:text-primary-500">
                   Terms of Service
@@ -261,10 +279,10 @@ const SignupPage = () => {
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={loading}
                 className="btn-primary w-full flex justify-center items-center"
               >
-                {isLoading ? (
+                {loading ? (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                 ) : (
                   'Create Account'

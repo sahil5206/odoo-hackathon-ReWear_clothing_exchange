@@ -158,6 +158,11 @@ router.post('/', auth, [
       $inc: { 'stats.itemsListed': 1 }
     });
 
+    // Emit real-time event
+    const io = req.app.get('io');
+    const populatedItem = await Item.findById(item._id).populate('owner', 'firstName lastName location');
+    io.to('browse-room').emit('item-added', populatedItem);
+
     res.status(201).json({
       message: 'Item created successfully',
       item
@@ -195,6 +200,11 @@ router.put('/:id', auth, async (req, res) => {
 
     await item.save();
 
+    // Emit real-time event
+    const io = req.app.get('io');
+    const populatedItem = await Item.findById(item._id).populate('owner', 'firstName lastName location');
+    io.to('browse-room').emit('item-updated', populatedItem);
+
     res.json({
       message: 'Item updated successfully',
       item
@@ -220,6 +230,10 @@ router.delete('/:id', auth, async (req, res) => {
     }
 
     await Item.findByIdAndDelete(req.params.id);
+
+    // Emit real-time event
+    const io = req.app.get('io');
+    io.to('browse-room').emit('item-deleted', req.params.id);
 
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
@@ -262,6 +276,16 @@ router.post('/:id/swap-request', auth, [
     }
 
     await item.addSwapRequest(req.user._id, req.body.message);
+
+    // Emit real-time event
+    const io = req.app.get('io');
+    io.to(`user-${item.owner}`).emit('swap-request', {
+      itemId: item._id,
+      itemTitle: item.title,
+      fromUserId: req.user._id,
+      fromUserName: `${req.user.firstName} ${req.user.lastName}`,
+      message: req.body.message
+    });
 
     res.json({ message: 'Swap request sent successfully' });
   } catch (error) {

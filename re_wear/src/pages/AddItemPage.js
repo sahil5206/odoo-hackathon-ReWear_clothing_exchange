@@ -1,6 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Upload, X, Plus, Tag, Package } from 'lucide-react';
+import { Upload, X, Plus, Tag, Package, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import apiService from '../services/api';
+import toast from 'react-hot-toast';
 
 const AddItemPage = () => {
   const [formData, setFormData] = useState({
@@ -14,7 +18,10 @@ const AddItemPage = () => {
   });
   const [images, setImages] = useState([]);
   const [tagInput, setTagInput] = useState('');
+  const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
   const categories = [
     'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'
@@ -71,15 +78,47 @@ const AddItemPage = () => {
     }));
   };
 
+  const validateForm = () => {
+    const newErrors = {};
+    
+    if (!formData.title.trim()) newErrors.title = 'Title is required';
+    if (!formData.description.trim()) newErrors.description = 'Description is required';
+    if (!formData.category) newErrors.category = 'Category is required';
+    if (!formData.size) newErrors.size = 'Size is required';
+    if (!formData.condition) newErrors.condition = 'Condition is required';
+    if (formData.points < 0) newErrors.points = 'Points must be positive';
+    if (images.length === 0) newErrors.images = 'At least one image is required';
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // Convert images to base64 for demo (in real app, upload to cloud storage)
+      const imageUrls = images.map(img => img.preview);
+      
+      const itemData = {
+        ...formData,
+        images: imageUrls,
+        points: parseInt(formData.points)
+      };
+
+      const response = await apiService.createItem(itemData);
+      toast.success('Item listed successfully!');
+      navigate('/dashboard');
+    } catch (error) {
+      toast.error(error.message || 'Failed to create item');
+    } finally {
       setIsLoading(false);
-      // Navigate to dashboard or show success message
-    }, 2000);
+    }
   };
 
   return (

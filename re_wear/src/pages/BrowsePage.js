@@ -1,5 +1,12 @@
-import React, { useState } from 'react';
-import { Search, Filter, Heart, Eye, ShoppingBag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Heart, Eye, ShoppingBag, RefreshCw } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useSocket } from '../contexts/SocketContext';
+import { useRealTimeData } from '../hooks/useRealTimeData';
+import { useAuth } from '../contexts/AuthContext';
+import ActivityFeed from '../components/ActivityFeed';
+import apiService from '../services/api';
+import toast from 'react-hot-toast';
 
 const BrowsePage = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -7,6 +14,15 @@ const BrowsePage = () => {
   const [selectedSize, setSelectedSize] = useState('all');
   const [selectedCondition, setSelectedCondition] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const { joinBrowseRoom, leaveBrowseRoom, emitUserActivity } = useSocket();
+  const { user, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  
+  // Use real-time data hook
+  const { data: realTimeItems, updateData, refreshData } = useRealTimeData([], 'items');
 
   const categories = [
     'All Categories', 'Tops', 'Bottoms', 'Dresses', 'Outerwear', 'Footwear', 'Accessories'
@@ -16,7 +32,8 @@ const BrowsePage = () => {
 
   const conditions = ['All Conditions', 'Like New', 'Excellent', 'Good', 'Fair'];
 
-  const items = [
+  // Fallback items for demo
+  const demoItems = [
     {
       id: 1,
       title: "Vintage Denim Jacket",
@@ -97,6 +114,52 @@ const BrowsePage = () => {
     }
   ];
 
+  // Use real-time items if available, otherwise use demo items
+  const items = realTimeItems.length > 0 ? realTimeItems : demoItems;
+
+  // Join browse room for real-time updates
+  useEffect(() => {
+    joinBrowseRoom();
+    emitUserActivity('started browsing items');
+    
+    return () => {
+      leaveBrowseRoom();
+    };
+  }, [joinBrowseRoom, leaveBrowseRoom, emitUserActivity]);
+
+  // Fetch items from API
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setIsLoading(true);
+        const items = await apiService.getRealTimeItems();
+        updateData(items);
+      } catch (error) {
+        console.log('Using demo items - API not available');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [updateData]);
+
+  // Handle view item
+  const handleViewItem = (item) => {
+    navigate(`/item/${item.id}`);
+  };
+
+  // Handle request swap
+  const handleRequestSwap = async (item) => {
+    if (!isAuthenticated) {
+      toast.error('Please login to request swaps');
+      return;
+    }
+
+    // Navigate to the swap request form
+    navigate(`/swap-request/${item.id}`);
+  };
+
   const filteredItems = items.filter(item => {
     const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.category.toLowerCase().includes(searchTerm.toLowerCase());
@@ -127,6 +190,9 @@ const BrowsePage = () => {
   return (
     <div className="min-h-screen bg-earth-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Main Content */}
+          <div className="lg:col-span-3">
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-earth-900 mb-2">Browse Items</h1>
@@ -229,7 +295,7 @@ const BrowsePage = () => {
         {/* Items Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {sortedItems.map((item) => (
-            <div key={item.id} className="card group">
+            <div key={item.id} className="card group flex flex-col h-full">
               <div className="relative overflow-hidden rounded-t-xl">
                 <img
                   src={item.image}
@@ -244,8 +310,8 @@ const BrowsePage = () => {
                 </button>
               </div>
               
-              <div className="p-4">
-                <h3 className="font-semibold text-earth-900 mb-2 group-hover:text-primary-600 transition-colors">
+              <div className="p-4 flex flex-col flex-1">
+                <h3 className="font-semibold text-earth-900 mb-2 group-hover:text-primary-600 transition-colors line-clamp-2">
                   {item.title}
                 </h3>
                 
@@ -254,7 +320,7 @@ const BrowsePage = () => {
                   <span className="text-primary-600 font-medium">{item.condition}</span>
                 </div>
                 
-                <div className="flex items-center justify-between text-xs text-earth-500 mb-4">
+                <div className="flex items-center justify-between text-xs text-earth-500 mb-3">
                   <span>Size: {item.size}</span>
                   <span>{item.location}</span>
                 </div>
@@ -273,14 +339,24 @@ const BrowsePage = () => {
                   </div>
                 </div>
                 
-                <div className="flex space-x-2">
-                  <button className="flex-1 btn-primary py-2 text-sm">
-                    <ShoppingBag className="w-4 h-4 mr-1" />
-                    View Item
-                  </button>
-                  <button className="flex-1 btn-outline py-2 text-sm">
-                    Request Swap
-                  </button>
+                {/* Action Buttons - Contained within card */}
+                <div className="mt-auto pt-3 border-t border-earth-100">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button 
+                      onClick={() => handleViewItem(item)}
+                      className="w-full inline-flex items-center justify-center bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-1 rounded-lg transition-all duration-200 transform hover:scale-105 shadow-md hover:shadow-lg text-xs"
+                    >
+                      <ShoppingBag className="w-3 h-3 mr-1" />
+                      View
+                    </button>
+                    <button 
+                      onClick={() => handleRequestSwap(item)}
+                      className="w-full inline-flex items-center justify-center bg-transparent hover:bg-primary-50 text-primary-600 border border-primary-600 font-medium py-2 px-1 rounded-lg transition-all duration-200 transform hover:scale-105 text-xs"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-1" />
+                      Swap
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -319,6 +395,13 @@ const BrowsePage = () => {
             </button>
           </div>
         )}
+          </div>
+
+          {/* Sidebar */}
+          <div className="lg:col-span-1">
+            <ActivityFeed />
+          </div>
+        </div>
       </div>
     </div>
   );
